@@ -42,7 +42,8 @@ while not done:
         musicChannel.stop()
     if playingMusic:
         currentTime = time.time()
-        if (sleepTime != 0) and (currentTime - startTime > 1000 * 60 * sleepTime):
+        if (sleepTime != 0) and (currentTime - startTime > 60 * sleepTime):
+                print "Sleep timer was exceeded. Going to sleep."
                 playingMusic = False
 	if not musicChannel.get_busy():
 		currentSongIndex+=1
