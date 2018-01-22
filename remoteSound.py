@@ -1,17 +1,25 @@
 import pygame
 import random
 import os
+import RPi.GPIO as GPIO
 from scapy.all import *
 
-#Intialize pygame
+# Intialize pygame
 pygame.init()
+
+# Setup GPIO for wired button detection
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# The state of the last wired button press
+lastInput = True
+
 
 # Main loop will continue until done is True
 done = False
 # When true music will be played
 playingMusic = False
-# When true amazon dash buttton has been detected
-detectedDash = False
+# When true amazon dash or wire button has been detected
+detectedButton = False
 # Index of current song being played (or that was just played)
 currentSongIndex = 0
 # How long in minutes to play music before auto stopping
@@ -37,30 +45,51 @@ for file in os.listdir("Music"):
 		# Add music path to the list
 		musicLibrary.append("Music/" + file)
 
+print 'All music loaded'
+
 # Randomize the list of music
 random.shuffle(musicLibrary)
 
+print 'Music shuffled. Ready to play'
+
 # A callback function to listen for the amazon dash button
 # This function is called whenever a packet is sniffed (After filtered)
-def detect_button(pkt):
+def detect_dashButton(pkt):
 	# If the packet has DHCP layer
 	if pkt.haslayer(DHCP):
 		# If the packet's source is the amazon dash button
 		if pkt[Ether].src == MAC_ADDRESS:
 			# Notify that the button was detected
-                        print 'Button detected'
-			global detectedDash
-			detectedDash = True
+                        print 'Dash Button detected'
+			global detectedButton
+			detectedButton = True
+
+# This function checks if the push button from ground to pin 18 is pressed
+def detect_wireButton():
+	global lastInput
+	# Get the state of the button
+	input_state = GPIO.input(18)
+	# Check if the button is pressed but only execute if the last time was not a press
+	# This is to keep from getting issues with one press registering as multiple.
+	if input_state == False and lastInput != False:
+		print 'Wired Button detected'
+		global detectedButton
+		detectedButton = True
+	# Store the current state for the next check
+	lastInput = input_state
+		
+	
 
 # Loop while not done
 while not done:
     # Listen to traffic
-    sniff(prn = detect_button, filter="(udp and (port 67 or68))", store=0, count=1)
-    # If the button was detected by the callback function
-    if detectedDash:
-	print "Button was pressed"
+    sniff(prn = detect_dashButton, filter="(udp and (port 67 or68))", store=0, count=1)
+    detect_wireButton()
+    # If the button was detected by either the wired or dash button
+    if detectedButton:
+	print 'Swapping state of music'
 	# Set detection to false
-	detectedDash = False
+	detectedButton = False
 	# Toggle the state of playing music
 	playingMusic = not playingMusic
 	# Set the start time for sleeping
